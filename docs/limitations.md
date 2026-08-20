@@ -1,0 +1,4 @@
+Only Gaussian weights
+No PSF estimation
+Noise estimation is limited
+No inherent deblending

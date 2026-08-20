@@ -14,7 +14,6 @@ def flux(image,
          noise_model = None,
          cutout_size: int = 128,
          image_conversion_factor: int = 1,
-         bilinear_interpolation: bool = False,
          show_progress: bool = True):
 
     # Create FFT builder
@@ -111,9 +110,6 @@ def flux(image,
             )
             weight_fft = psfdeconvolver.psf_prefactor * FT
             last_weight = current_weight
-            if bilinear_interpolation:
-                complex_in[:] = weight_fft
-                weight_rescale_unshifted = irfft2()
 
         # ---- extract cutout ----
         cutout, (cx_cut, cy_cut) = padded_cutout_with_center(
@@ -127,15 +123,10 @@ def flux(image,
         dx = cx_cut - ix
         dy = cy_cut - iy
 
-        if bilinear_interpolation:
-            fluxes[out_idx], weight_rescale = calc_flux_shift(
-                weight_rescale_unshifted, cutout, dx, dy)
-
-        else:
-            phase = compute_phase(kx_scaled, ky_scaled, dx, dy)
-            np.multiply(weight_fft, phase, out=complex_in)
-            weight_rescale = irfft2()
-            fluxes[out_idx] = calc_flux(weight_rescale, cutout)
+        phase = compute_phase(kx_scaled, ky_scaled, dx, dy)
+        np.multiply(weight_fft, phase, out=complex_in)
+        weight_rescale = irfft2()
+        fluxes[out_idx] = calc_flux(weight_rescale, cutout)
 
         # ---- variance ----
         if noise_model is not None:

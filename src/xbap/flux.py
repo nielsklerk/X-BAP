@@ -24,7 +24,7 @@ def flux(image,
     irfft2 = pyfftw.builders.irfft2(
         complex_in
     )
-
+    centers = np.asarray(centers)
     centers = np.atleast_2d(centers)
     ws = np.asarray(weight_sizes)
 

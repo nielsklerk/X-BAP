@@ -3,10 +3,8 @@ import pyfftw.interfaces.numpy_fft as fft
 from .utils import padded_cutout_with_center
 
 class PSFDeconvolver:
-    def __init__(self, psf: np.ndarray):
+    def __init__(self, psf: np.ndarray) -> None:
         self.psf = psf
-        self.psf_cache = None
-        self._fft_buffer = None
         self.KX, self.KY = None, None
         self.psf_prefactor = None
 
@@ -22,14 +20,17 @@ class PSFDeconvolver:
             Factor for numerical stability
         """
 
-        ky = fft.fftfreq(cutout_size) * 2*np.pi
-        kx = fft.rfftfreq(cutout_size) * 2*np.pi
-
+        # Create meshgrid for the fourier modes
+        ky = fft.fftfreq(cutout_size) * 2 * np.pi
+        kx = fft.rfftfreq(cutout_size) * 2 * np.pi
         self.KX, self.KY = np.meshgrid(kx, ky)
 
+        # Cut/Pad the PSF to the cutout size
         psf_padded, _ = padded_cutout_with_center(
             self.psf, self.psf.shape[0]/2, self.psf.shape[1]/2, cutout_size)
 
+        # Calculate the fourier transform of the padded PSF
         ft_psf = fft.rfft2(psf_padded[::-1, ::-1])
 
+        # Store the prefactor used for the deconvolution
         self.psf_prefactor = np.conj(ft_psf) / (np.abs(ft_psf)**2 + eps)

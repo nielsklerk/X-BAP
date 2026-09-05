@@ -140,4 +140,4 @@ def flux(image,
                 wf, x_c, y_c, cutout_size
             )
 
-    return fluxes if noise_model is None else (fluxes, variances)
+    return fluxes if noise_model is None else (fluxes, np.sqrt(variances))

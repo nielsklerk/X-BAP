@@ -6,125 +6,111 @@ from .utils import padded_cutout_with_center, find_best_square_coords
 class NoiseModel:
     def __init__(
         self,
-        image: np.ndarray | None = None,
+        noise: np.ndarray | None = None,
         rms: np.ndarray | None = None,
         image_conversion_factor: float = 1.0,
         rms_conversion_factor: float = 1.0,
-        uncorrelated: bool = False
+        uncorrelated: bool = False,
     ) -> None:
 
-        self.image = image
+        self.noise = noise
         self.rms = rms
         self.image_conversion_factor = image_conversion_factor
         self.rms_conversion_factor = rms_conversion_factor
         self.uncorrelated = uncorrelated
 
-        self.noise_square = None
         self.noise_covariance = None
-        self.poisson_image = None
         self.kernel = None
 
-    def find_noise_square(self,
-                          box_size: int = 128,
-                          cutout_size: int = 128,
-                          image: np.ndarray | None = None
-                          ) -> None:
+    def set_noise_covariance(self, cutout_size: int) -> None:
         """
-        Find a sourceless square from an image and store it.
+        Sets the noise covariance matrix from the noise square
+        which is used for the error calculation.
 
         Parameters
         ----------
-        box_size: int, optional
-            Size of the noise square
-        box_size: int, optional
-            Size of the cutout
-        image: np.ndarray | None, optional
-            Image from which a noise square is extracted
-            If None the class image is used
+        cutout_size: int
+            Size of the cutout.
         """
-        image = self.image if image is None else image
 
-        ny, nx = image.shape
+        # Calculate the local covariance matrix from the noise
+        noise_covariance_full = self._covariance_fft2d(self.noise)
 
-        best_std = np.inf
-        best_square = None
+        cy, cx = np.array(noise_covariance_full.shape) // 2
 
-        # define smaller square size and step
-        y, x, found = find_best_square_coords(
-            image.astype(np.float32),
-            box_size,
+        # Cut/Pad the covariance to the cutout size
+        self.noise_covariance, _ = padded_cutout_with_center(
+            noise_covariance_full,
+            cx,
+            cy,
+            cutout_size,
         )
 
-        if not found:
-            raise RuntimeError(
-                "No valid square found."
-            )
+        # Apply the conversion factor
+        self.noise_covariance *= self.image_conversion_factor**2
 
-        best_square = image[
-            y:y+box_size,
-            x:x+box_size,
-        ]
-
-        if box_size == cutout_size:
-            self.noise_square = best_square
-        else:
-            self.noise_square, _ = padded_cutout_with_center(
-                best_square, box_size/2, box_size/2, cutout_size)
-
-    def set_noise_square(self, noise_square):
-        self.noise_square = noise_square
-
-    def set_noise_covariance(self) -> None:
-        """
-        Extract a fixed-size cutout centered on (cy, cx).
-        Pads with zeros when the cutout extends beyond the image.
-        """
-
-        image = self.noise_square * self.image_conversion_factor
-        self.noise_covariance = self._covariance_fft2d(image)
-
-    def _covariance_fft2d(self, noise_image: np.ndarray) -> None:
+    def _covariance_fft2d(self, noise_image: np.ndarray) -> np.ndarray:
         """
         Calculate the local covariance matrix from the noise square
 
         Parameters
         ----------
         noise_image: np.ndarray
-            Description of param1
+            Noise image used to estimate the local covariance matrix
+
+        Returns
+        -------
+        np.ndarray:
+            Local covariance matrix
         """
 
+        # Store noise image dimensions
+        height, width = noise_image.shape
+
+        # Remove mean
         img = noise_image.copy()
-        h, w = img.shape
         img -= np.mean(img)
 
-        self.ac = fftconvolve(img, img[::-1, ::-1], mode="same")
-        self.ac /= (h * w)
-        return self.ac
+        # Calculate autocorrelation and normalize the result
+        autocorrelation = fftconvolve(img, img[::-1, ::-1], mode="same")
 
-    def calc_error(self, weight, xc, yc, size):
+        overlap = fftconvolve(
+            np.ones_like(img),
+            np.ones_like(img)[::-1, ::-1],
+            mode="same",
+        )
+
+        autocorrelation /= overlap
+
+        return autocorrelation
+
+    def calc_error(self, weight: np.ndarray, xc: int, yc: int, cutout_size: int) -> np.ndarray:
         if self.rms is None:
             return self.background_error(weight)
         else:
-            return self.rms_error(weight, xc, yc, size)
+            return self.rms_error(weight, xc, yc, cutout_size)
 
-    def background_error(self, weight):
+    def background_error(self, weight: np.ndarray) -> np.ndarray:
         if self.uncorrelated:
-            negative_pixels = self.noise_square[self.noise_square < 0]
+            negative_pixels = self.noise[self.noise < 0]
 
             background_variance = (
                 np.sum(negative_pixels**2) / len(negative_pixels)
             ) * self.image_conversion_factor**2
             return background_variance * np.sum(weight**2)
-        autocorr_weight = fftconvolve(weight, weight[::-1, ::-1], mode='same')
+
+        autocorr_weight = fftconvolve(weight, weight[::-1, ::-1], mode="same")
+
         return np.sum(self.noise_covariance * autocorr_weight)
 
-    def rms_error(self, weight, xc, yc, size):
+    def rms_error(self, weight, xc, yc, cutout_size) -> np.ndarray:
         if self.kernel is None:
-            self.kernel = self.noise_covariance / np.max(self.noise_covariance)
+            cy, cx = np.array(self.noise_covariance.shape) // 2
+            self.kernel = self.noise_covariance / self.noise_covariance[cy, cx]
 
-        rms_cutout, _ = padded_cutout_with_center(self.rms, xc, yc, size)
+        rms_cutout, _ = padded_cutout_with_center(self.rms, xc, yc, cutout_size)
         weight_prime = rms_cutout * weight * self.rms_conversion_factor
         if self.uncorrelated:
-            return np.sum(weight_prime * weight_prime)
-        conv = fftconvolve(weight_prime, self.kernel, mode='same')
+            return np.sum(weight_prime ** 2)
+        conv = fftconvolve(weight_prime, self.kernel, mode="same")
         return np.sum(weight_prime * conv)

@@ -1,0 +1,214 @@
+\section{X-BAP}\label{ch: x-bap}
+
+The goal of \gls{x-bap} is to measure the pre-seeing aperture flux for observations that have different \glspl{psf}. In this chapter, the necessary mathematics is derived to be able to measure the pre-seeing aperture flux and estimate the error on the measurement. This is important to find the intrinsic colors of sources in observations, which can be used for applications such as photometric redshift.
+
+
+\subsection{Flux Measurement}\label{subsec: flux measurement}
+
+In aperture photometry, a weight function is used to find the flux of sources in observations. In general, it can be expressed in the following way
+
+\begin{equation}\label{eq: aperture photometry}
+    F_\mathrm{A} = \int dxdyO(x,y)W_\mathrm{A}(x,y),
+\end{equation}
+where $O(x,y)$ is the observed image and $W_\mathrm{A}(x,y)$ some weight function. For example, in circular aperture photometry, this weight function is unity for pixels within a given radius and zero outside that radius.
+\[
+W_\mathrm{A,circular}(x,y) =
+\begin{cases}
+1, & (x-x_0)^2+ (y-y_0)^2 \le r^2, \\
+0, & \mathrm{otherwise},
+\end{cases}
+\]
+where $(x_0, y_0)$ is the center of the circular aperture and $r$ the size of the aperture. However, the weight function can take any form, such as a circular Gaussian. 
+\begin{equation}
+    W_\mathrm{A,circular\;Gaussian}(x,y)=
+\exp\left(
+-\frac{(x-x_0)^2+(y-y_0)^2}{2\sigma^2}
+\right),
+\end{equation}
+where, similar to the circular aperture, $(x_0, y_0)$ is the center of the aperture and $\sigma$ is the scale parameter, which determines the size of the aperture.
+
+The observed image $O(x,y)$ is the convolution of an intrinsic image with the \gls{psf}, with noise added to it
+
+\begin{equation}\label{eq: observation convolution}
+    O(x,y)=(P\otimes I)(x,y)+N(x,y) = \int dx'dy'P(x-x', y-y')I(x',y')+N(x,y),
+\end{equation}
+where $P$ and $I$ are the \gls{psf} and intrinsic image respectively. The intrinsic image can be viewed as the image you would have with infinite resolution (i.e., the \gls{psf} is a delta function). The convolution is denoted by $\otimes$.
+\autoref{eq: observation convolution} can be used to rewrite \autoref{eq: aperture photometry} to the form
+
+\begin{equation}
+    F_\mathrm{A} = \int dxdy\int dx'dy'P(x-x', y-y')I(x',y')W_\mathrm{A}(x,y),
+\end{equation}
+where it is assumed that the integral over the noise weighted by the weight function is zero.
+Changing the order of integration and changing the primed coordinates to the unprimed coordinates gives
+
+\begin{equation}
+    F_\mathrm{A} = \int dxdyI(x,y)\tilde{W}_\mathrm{A}(x,y),
+\end{equation}
+where 
+
+\begin{equation}\label{eq: weight convolution}
+    \tilde{W}_\mathrm{A}(x,y) = \int dx'dy'P(x'-x, y'-y)W_\mathrm{A}(x',y')=(\bar{P}\otimes W_\mathrm{A})(x,y)
+\end{equation}
+is the pre-seeing weight function with $\bar{P}$ the reflected \gls{psf} $\bar{P}(x,y)=P(-x,-y)$.
+\newline
+\newline
+The \gls{x-bap} algorithm then works as follows:
+\begin{tcolorbox}[colback=white,colframe=black,title=X-BAP procedure]
+\begin{enumerate}
+    \item Choose a pre-seeing aperture function $\tilde{W}_\mathrm{A}$, which is applied to all bands.
+    
+    \item Calculate the post-seeing weight $W_\mathrm{A}^i$ by deconvolving the weight function $\tilde{W}_\mathrm{A}$ with the reflected \gls{psf} $\bar{P}_i$ of band $i$:
+    \[
+    W_\mathrm{A}^i
+    =
+    \tilde{W}_\mathrm{A}
+    \otimes^{-1}
+    \bar{P}_i.
+    \]
+    
+    \item Calculate the aperture flux for each band using the post-seeing weight function $W_\mathrm{A}^i$.
+\end{enumerate}
+\end{tcolorbox}
+\noindent Rather than correcting for the \gls{psf} in the observation itself, this method adjusts the weight function based on the \gls{psf} and applies the rescaled weight function directly to the observation. This gives more accurate results as the weight function can be chosen to be analytical and the \gls{psf} is often known to a high degree of certainty. Furthermore, this method does not necessarily require fitting such as \gls{psf}-fitting and model-fitting photometry and is therefore a fast method similar to basic aperture photometry, only requiring the rescaling of the weight function as an extra computational step.
+\newpage
+\noindent The deconvolution can be computed by applying the Fourier transform to \autoref{eq: weight convolution} to find the frequency components of the \gls{psf} and pre-seeing weight function. Since a convolution turns into a multiplication in the frequency domain, this results in
+
+\begin{equation}\label{eq: fourier domain}
+    \mathcal{F}\{\tilde{W}_\mathrm{A}\}=\mathcal{F}\{\bar{P}_i\}\cdot\mathcal{F}\{W_\mathrm{A}^i\}.
+\end{equation}
+From \autoref{eq: fourier domain}, a direct formula for the post-seeing aperture can be derived,
+
+\begin{equation}\label{eq: analytical deconvolution}
+    W^i_\mathrm{A} = \mathcal{F}^{-1}\left\{\frac{\mathcal{F}\{\tilde{W}_\mathrm{A}\}}{\mathcal{F}\{\bar{P}_i\}}\right\}.
+\end{equation}
+Although \autoref{eq: analytical deconvolution} is mathematically correct, it has a division by the Fourier transform of the reflected \gls{psf}, which can be close to 0 at certain points. Due to the division in Fourier space, any noise gets massively amplified, leading to inaccurate results. 
+To improve the numerical stability of \autoref{eq: analytical deconvolution}, a factor $\varepsilon=10^{-8}$ is added to the equation to stabilize it 
+
+\begin{equation}\label{eq: numerical deconvolution}
+    W^i_\mathrm{A} = \mathcal{F}^{-1}\left\{\frac{\mathcal{F}\{\bar{P}_i\}^*}{|\mathcal{F}\{\bar{P}_i\}|^2+\varepsilon}\cdot\mathcal{F}\{\tilde{W}_\mathrm{A}\}\right\}.
+\end{equation}
+This equation forms the basis for the \gls{x-bap} method. In this work, the pre-seeing is chosen to be Gaussian as this has an analytical Fourier Transform, which prevents effects like fringing in the deconvolution.
+In the special case where the weight matrix is the same for different sources, except for a shift. The aperture flux becomes 
+
+\begin{equation}
+    F_\mathrm{A}(x',y') = \int dxdy\;O(x,y)W_\mathrm{A}(x-x',y-y') = (O \otimes \bar{W}_\mathrm{A})(x',y'),
+\end{equation}
+with $\bar{W}_A(x,y)=W_A(-x,-y)$ being the reflected weight function.
+
+\noindent As the image has discrete pixels, the formula for the aperture flux becomes
+
+\begin{equation}\label{eq: flux}
+    F_\mathrm{A} = \sum_{x,y}O(x,y)W_\mathrm{A}(x,y),
+\end{equation}
+where $O(x,y)$ and $W_\mathrm{A}(x,y)$ are the pixel values of the observation and the post-seeing weight function, respectively. The uncertainty in the measured aperture flux can be calculated using
+
+\begin{equation}\label{eq: variance}
+    \sigma^2 = \sum_{x,y}\sum_{x',y'}W_\mathrm{A}(x,y)C(x,y;x',y')W_\mathrm{A}(x',y'),
+\end{equation}
+where $C(x,y;x',y')$ is the covariance matrix between the pixels at position $(x,y)$ and $(x',y')$. This work develops two different methods to calculate the values of the covariance matrix. These are discussed in the following subsections \Cref{subsec: Noise Estimation from background Noise} and \Cref{subsec: Noise from RMS}.
+
+% \subsubsection{Uncorrelated Noise}
+% Assuming that the pixel variations are independent and have variance $\sigma_\mathrm{pixel}^2$, the covariance matrix can be written like $C_{ij}=\sigma_\mathrm{pixel}^2\delta_{ij}$. This simplifies the formula for the uncertainty in the flux to
+
+% \begin{equation}\label{eq: uncorrelated noise}
+%     \sigma^2 = \sigma_{\mathrm{pixel}}^2\sum_iw_i^2.
+% \end{equation}
+% Assuming the noise is symmetric around zero, we consider only negative pixel values. This is to exclude any signals other than the noise. Let $O_i$ be the pixel values at index $i$ and $O_-$ be the set of indexes where $O_i<0$
+
+% \begin{equation}
+%     \sigma_\mathrm{pixel}^2 = \frac{1}{|O_{-}|} \sum_{i \in O_{-}} O_i^2
+% \end{equation}
+
+% \subsubsection{Poisson Noise}
+
+% For the Poisson noise, it is assumed that the pixels are uncorrelated. However, unlike the variance in \autoref{eq: uncorrelated noise}, this noise depends on the location in the image. A characteristic property of Poisson noise is that the variance is equal to the mean of the value. So we can take the image as an estimate for the Poisson variance.
+
+% \begin{equation}
+%     \sigma_\mathrm{Poisson}^2=\sum_iw_i^2O_i
+% \end{equation}
+% This only works if the image $O_i$ is in counts. If this is not the case, the observation should first be converted to counts, then the variance can be calculated, and lastly, the variance can be converted back to the original units of the image.
+
+\newpage
+\subsection{Noise Estimation from Background Noise}\label{subsec: Noise Estimation from background Noise}
+
+To estimate the error on the measured aperture flux of a source, some assumptions need to be made about the covariance matrix. 
+Assuming that the covariance of pixels only depends on the distance between the pixels and is the same across the entire image, the covariance becomes a local covariance matrix
+
+\begin{equation}
+    C(x,y;x',y') \approx C(x'-x,y'-y)=C(\Delta x, \Delta y).
+\end{equation}
+Filling this approximation into \autoref{eq: variance}, the expression simplifies to 
+
+\begin{equation}\label{eq: local variance}
+    \sigma^2 = \sum_{x,y}\sum_{\Delta x,\Delta y}W_\mathrm{A}(x,y)C(\Delta x, \Delta y)W_\mathrm{A}(x+\Delta x,y + \Delta y).
+\end{equation}
+The local covariance matrix $C(\Delta x, \Delta y)$ can be computed using the formula
+
+\begin{equation}
+    C(\Delta x, \Delta y) = \left\langle \tilde{N}(x,y)\tilde{N}(x+\Delta x,y+\Delta y)\right\rangle.
+\end{equation}
+where $\tilde{N}(x,y)=N(x,y) - \langle N(x,y)\rangle$ with $N$ being a pure noise image for which an empty part of the sky can be used.
+
+\begin{equation}
+    C(\Delta x, \Delta y) = \frac{\int dx dy \tilde{N}(x,y)\tilde{N}(x+\Delta x,y+\Delta y)}{\int dx dy} 
+\end{equation}
+which can be written like
+
+\begin{equation}
+    C(\Delta x, \Delta y) = \frac{1}{\int dx dy}\left(\tilde{N} \otimes\Bar{\tilde{N}}\right)(\Delta x, \Delta y),
+\end{equation}
+where $\Bar{\tilde{N}}(x,y)=\tilde{N}(-x,-y)$. This makes the local covariance matrix the autocorrelation function of the noise.
+Lastly, we assume that the local covariance matrix is zero above some lag $L$ such that $C(\Delta x, \Delta y) = 0$ $\forall|\Delta x|, |\Delta y| > L$.
+
+\noindent This reduces the number of terms in \autoref{eq: local variance}
+
+\begin{equation}\label{eq: variance correlated}
+    \sigma^2 = \sum_{\Delta x, \Delta y=-L}^{+L}C(\Delta x, \Delta y)\sum_{x,y}W_\mathrm{A}(x,y)W_\mathrm{A}(x+\Delta x,y + \Delta y)
+\end{equation}
+Finally, if the pixels in the image are uncorrelated, the only non-zero element of the local covariance matrix is $C(0,0) = \sigma_\mathrm{pixel}^2$, which reduces the error on the flux calculation to
+\begin{equation}\label{eq: variance uncorrelated}
+    \sigma^2 = \sigma^2_\mathrm{pixel}\sum_{x,y}W^2_\mathrm{A}(x,y).
+\end{equation}
+
+\newpage
+\subsection{Noise from RMS Map}\label{subsec: Noise from RMS}
+If the noise varies across the image, the assumption made in \Cref{subsec: Noise Estimation from background Noise} about the noise only depending on the distance between pixels does not hold anymore. In this case, the only assumption required to obtain the covariance matrix is that the correlation between two pixels does not depend on their spatial location within the image, i.e., the correlation structure is stationary. So the covariance matrix can be approximated like
+
+\begin{equation}\label{eq: rms covariance}
+    C(x,y;x',y') \approx \sigma(x,y)\rho(x-x',y-y')\sigma(x',y'),
+\end{equation}
+where $\sigma(x,y)$ is the standard deviation at position $(x,y)$ and $\rho(x-x',y-y')$ the correlation between the points $(x,y)$ and $(x',y')$. The values of $\sigma(x,y)$ are derived from the \gls{rms} map. To estimate the matrix elements for the correlation function, the covariance matrix $C(\Delta x, \Delta y)$ is used from \autoref{subsec: Noise Estimation from background Noise} by using 
+
+\begin{equation}
+    \rho(x-x',y-y')=\frac{C(x-x',y-y')}{\max C(x-x',y-y')}
+\end{equation}
+Inserting \autoref{eq: rms covariance} into \autoref{eq: variance} results in
+
+\begin{equation}\label{eq: rms variance}
+    \sigma^2=\sum_{x,y,x',y'}W_\mathrm{A}(x,y)\sigma(x,y)\rho(x-x',y-y')\sigma(x',y')W_\mathrm{A}(x',y').
+\end{equation}
+By introducing a weighted standard deviation $\sigma'(x,y)=W_\mathrm{A}(x,y)\sigma(x,y)$, \autoref{eq: rms variance} can be written like
+
+\begin{equation}\label{eq: rms variance v2}
+    \sigma^2=\sum_{x,y,x',y'}\sigma'(x,y)\rho(x-x',y-y')\sigma'(x',y').
+\end{equation}
+\autoref{eq: rms variance v2} can be further simplified to the expression
+
+\begin{equation}\label{eq: variance rms correlated}
+    \sigma^2=\sum_{x,y}\sigma'(x,y)(\rho\otimes \sigma')(x,y).
+\end{equation}
+In the case that the noise in the pixels is uncorrelated, the only non-zero element of the correlation function is $\rho(0,0)=1$. This results in the expression simplifying to
+
+\begin{equation}\label{eq: variance rms uncorrelated}
+    \sigma^2=\sum_{x,y}\sigma'^2(x,y) =\sum_{x,y}\sigma^2(x,y)W_\mathrm{A}^2(x,y).
+\end{equation}
+
+% \subsubsection{Point-Source Detector}
+% Assuming that the sources in the images can be modeled as Gaussian, we can find the flux for different pre-seeing weight sizes $\sigma$ as
+% \begin{equation}\label{eq: point-source detector}
+%     F(\sigma)=\frac{A\sigma^2}{a^2+\sigma^2}\exp\left\{-\frac{d^2}{2(a^2+\sigma^2)}\right\},
+% \end{equation}
+% where $A$ is some normalization constant, $d$ is the distance between the center of the source and the center of the weight function, and $a$ is the scale parameter of the source.
+% By measuring the flux at different weight sizes and fitting \autoref{eq: point-source detector} to this, the value of $a$ can be used to find a measure of how close the object is to being a point-source.
+
+\newpage

@@ -22,5 +22,4 @@ flux, error = xbap_flux(image,
                         [8, 4, np.pi/4] # weight parameters: horizontal scale parameter, vertical scale parameter, rotation angle (rad)
                         )
 print(flux[0])
-print(error[0])
 ```

@@ -5,7 +5,7 @@ Cross-Band Aperture Photometry (X-BAP) is a code for measuring aperture fluxes i
 ```bash
 git clone https://github.com/nielsklerk/X-BAP.git
 cd X-BAP
-pip install . -r requirements.txt
+pip install .
 ```
 
 ## Quick Start

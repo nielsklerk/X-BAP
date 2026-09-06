@@ -1,143 +1,265 @@
 import numpy as np
-import pyfftw.interfaces.numpy_fft as fft
-import pyfftw
+from .noise import NoiseModel
+from .psf import PSFDeconvolver
 from tqdm import tqdm
-from .utils import padded_cutout_with_center, fourier_gaussian_2d, prepare_phase_coordinates, compute_phase, calc_flux
+from .utils import (
+    padded_cutout_with_center,
+    fourier_gaussian_2d,
+    prepare_phase_coordinates,
+    compute_phase,
+    calc_flux,
+)
 
-pyfftw.interfaces.cache.enable()
 
-
-def flux(image,
-         centers,
-         psfdeconvolver,
-         weight_sizes,
-         noise_model = None,
+def flux(image: np.ndarray,
+         centers: np.ndarray,
+         weight_sizes: float | np.ndarray,
+         psfdeconvolver: PSFDeconvolver,
+         noise_model: NoiseModel | None = None,
          cutout_size: int = 128,
          image_conversion_factor: int = 1,
-         show_progress: bool = True):
+         show_progress: bool = True,
+         ) -> tuple[np.ndarray, np.ndarray | None]:
+    """
+    Calculate the X-BAP aperture flux.
 
-    # Create FFT builder
-    complex_in = pyfftw.empty_aligned(
-        (cutout_size, cutout_size // 2 + 1),
-        dtype="complex64",
-    )
-    irfft2 = pyfftw.builders.irfft2(
-        complex_in
-    )
-    centers = np.asarray(centers)
+    Parameters
+    ----------
+    image: np.ndarray
+        Image in which the aperture flux will be calculated.
+    centers: np.ndarray
+        Centers of the Gaussian apertures.
+    weight_sizes: float | np.ndarray, shape (N,) or (N, 3)
+        Parameters determining the shape of the apertures, with supported shapes.
+
+        - scalar: same scale circular Gaussian apertures is used for all centers.
+
+        - (N,): one cicular Gaussian aperture per center.
+
+        - (N, 3): each elliptical Gaussian aperture is defined by three parameters:
+        the scale parameter along the x-axis, the scale parameter along the y-axis,
+        and the rotation angle relative to the vertical axis.
+    psf_deconvolver: PSFDeconvolver
+        PSF deconvolution algorithm.
+    noise_model: NoiseModel
+        Noise model.
+    cutout_size: int = 128
+        Size of the cutout.
+    image_conversion_factor: float = 1.0
+        Conversion factor.
+    show_progress: bool = False
+        Whether to show the progress.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray|None]
+        The calculated X-BAP aperture flux. When measurement errors are included,
+        returns (flux, error) else (flux, None).
+
+    """
+
+    image = np.asarray(image)
+
     centers = np.atleast_2d(centers)
     ws = np.asarray(weight_sizes)
 
-    Nc = centers.shape[0]
+    if centers.shape[1] != 2:
+        raise ValueError("centers must have shape (N,2)")
 
     # Normalize weight input
     # If only one weight size is given, the weight becomes a circular Gaussian
     if ws.ndim == 0:
         ws = np.array([[ws.item(), ws.item(), 0.0]])
-    # If multiple weight sizes are given, the weights are expanded to match the number of centers
+
     elif ws.ndim == 1:
+        # One elliptical Gaussian for all centers
         if ws.size == 3:
             ws = ws.reshape(1, 3)
-        else:
-            ws = np.column_stack([ws, ws, np.zeros_like(ws)])
-    elif ws.ndim == 2 and ws.shape[1] != 3:
-        raise ValueError("weight_sizes must have shape (N,) or (N,3)")
 
-    Nw = ws.shape[0]
+        # One circular Gaussian for each center
+        else:
+            ws = np.column_stack([
+                ws,
+                ws,
+                np.zeros_like(ws),
+            ])
+
+    elif ws.ndim == 2 and ws.shape[1] != 3:
+        raise ValueError(
+            "weight_sizes must have shape (N,) or (N,3)"
+        )
+
+    # Number of centers and weights
+    Nc = len(centers)
+    Nw = len(ws)
 
     # Check the type of loop to be used
     if Nw == 1:
         mode = "scalar_weight"
+
     elif Nc == 1:
         mode = "scalar_center"
+
     elif Nc == Nw:
         mode = "paired"
+
     else:
         raise ValueError(
-            "Mismatch: centers and weights must match or be scalar-expanded")
+            "Mismatch: centers and weight_sizes must have the same "
+            "number of elements unless one of them contains only one element"
+        )
 
-    # Initialize the FFT grid
+    # FFT grid
     H = W = cutout_size
-    ky = fft.fftfreq(H)[:, None]
-    kx = fft.rfftfreq(W)[None, :]
+
+    complex_in = np.empty(
+        (H, W // 2 + 1),
+        dtype=np.complex64,
+    )
+
+    ky = np.fft.fftfreq(H)[:, None]
+    kx = np.fft.rfftfreq(W)[None, :]
+
     kx_scaled, ky_scaled = prepare_phase_coordinates(kx, ky)
 
-    #
-    fluxes = np.empty(max(Nc, Nw))
-    variances = None if noise_model is None else np.empty(max(Nc, Nw))
+    n_measurements = max(Nc, Nw)
 
-    last_weight = None
-    weight_fft = None
-    cutout_buffer = np.empty((H, W))
-
-    # ----------------------------
-    # Main loop
-    # ----------------------------
-    if Nw > 1:
-        sort_idx = np.argsort(ws[:, 0])
+    # Allocate output arrays
+    fluxes = np.empty(n_measurements)
+    if noise_model is None:
+        variances = None
     else:
-        sort_idx = np.array([0])
+        variances = np.empty(n_measurements)
 
-    for j in tqdm(range(max(Nc, Nw)), desc='Measuring Flux', disable=not show_progress):
+    # Reusable buffers
+    last_weight = None
+    weight_fft = np.empty_like(
+        psfdeconvolver.KX,
+        dtype=np.complex64,
+    )
+    cutout_buffer = np.empty(
+        (H, W),
+        dtype=np.float64,
+    )
+    phase = np.empty(
+        (H, W // 2 + 1),
+        dtype=np.complex64,
+    )
 
-        i_w = sort_idx[j] if j < Nw else sort_idx[0]
+    # Sort weights so equal weights are adjacent
+    if Nw > 1:
+        sort_idx = np.lexsort(
+            (
+                ws[:, 2],
+                ws[:, 1],
+                ws[:, 0],
+            )
+        )
 
-        # ---- select center ----
+    # Main loop
+    for j in tqdm(
+            range(n_measurements),
+            desc="Measuring Flux",
+            disable=not show_progress,
+    ):
+
+        # Select sorted index unless only one weight is given
+        if Nw > 1:
+            i_w = sort_idx[j]
+        else:
+            i_w = 0
+
+        # Select center and output index
         if mode == "scalar_center":
+            # Only one center, so the output index is the same as the weight index
             x_c, y_c = centers[0]
             out_idx = i_w
         elif mode == "paired":
+            # Center and weight index are the same
             x_c, y_c = centers[i_w]
             out_idx = i_w
-        else:  # scalar_weight
+        else:
+            # Only one weight, so the output index is the same as the center index
             x_c, y_c = centers[j]
             out_idx = j
 
-        # ---- select weight ----
-        if mode == "scalar_weight":
-            sx, sy, th = ws[0]
-        else:
-            sx, sy, th = ws[i_w]
-
-        # ---- recompute PSF-weight FFT if needed ----
-        current_weight = (sx, sy, th)
-
-        if current_weight != last_weight:
-            FT = fourier_gaussian_2d(
+        # Recompute the weight FFT if the weight has changed
+        current_weight = ws[i_w]
+        if last_weight is None or np.any(current_weight != last_weight):
+            fourier_gaussian_2d(
                 psfdeconvolver.KX,
                 psfdeconvolver.KY,
-                sx, sy, th
+                current_weight[0],
+                current_weight[1],
+                current_weight[2],
+                weight_fft,
             )
-            weight_fft = psfdeconvolver.psf_prefactor * FT
+
+            weight_fft *= psfdeconvolver.psf_prefactor
+
             last_weight = current_weight
 
-        # ---- extract cutout ----
+        # Extract cutout from image
         cutout, (cx_cut, cy_cut) = padded_cutout_with_center(
-            image, x_c, y_c, cutout_size, cutout_buffer
+            image,
+            x_c,
+            y_c,
+            cutout_size,
+            cutout_buffer,
         )
+
+        # Apply the conversion factor
         cutout *= image_conversion_factor
 
-        # ---- subpixel shift ----
+        # Find the subpixel translation in the cutout
         ix = int(cx_cut)
         iy = int(cy_cut)
+
         dx = cx_cut - ix
         dy = cy_cut - iy
 
-        phase = compute_phase(kx_scaled, ky_scaled, dx, dy)
-        np.multiply(weight_fft, phase, out=complex_in)
-        weight_rescale = irfft2()
-        fluxes[out_idx] = calc_flux(weight_rescale, cutout)
+        # If there is no subpixel translation, the FFT can be computed directly
+        if dx == 0.0 and dy == 0.0:
+            complex_in[:] = weight_fft
 
-        # ---- variance ----
-        if noise_model is not None:
-            if noise_model.rms is None:
-                complex_in[:] = weight_fft
-                wf = irfft2()
-            else:
-                wf = weight_rescale
-
-            variances[out_idx] = noise_model.calc_error(
-                wf, x_c, y_c, cutout_size
+        # Otherwise, the FFT must be computed using a phase shift
+        else:
+            compute_phase(
+                kx_scaled,
+                ky_scaled,
+                dx,
+                dy,
+                phase,
             )
 
-    return fluxes if noise_model is None else (fluxes, np.sqrt(variances))
+            np.multiply(
+                weight_fft,
+                phase,
+                out=complex_in,
+            )
+
+        # Find the rescaled weight based on the PSF
+        weight_rescale = np.fft.irfft2(
+            complex_in,
+            s=(H, W),
+        )
+
+        # Calculate the aperture flux
+        fluxes[out_idx] = calc_flux(
+            weight_rescale,
+            cutout,
+        )
+
+        # Calculate the measurement error
+        if noise_model is not None:
+            variances[out_idx] = noise_model.calc_error(
+                weight_rescale,
+                x_c,
+                y_c,
+                cutout_size,
+            )
+
+    # Return the fluxes and errors
+    if noise_model is None:
+        return fluxes, None
+    return fluxes, np.sqrt(variances)

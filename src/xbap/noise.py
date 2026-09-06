@@ -5,12 +5,12 @@ from .utils import padded_cutout_with_center
 
 class NoiseModel:
     def __init__(
-        self,
-        noise: np.ndarray | None = None,
-        rms: np.ndarray | None = None,
-        image_conversion_factor: float = 1.0,
-        rms_conversion_factor: float = 1.0,
-        uncorrelated: bool = False,
+            self,
+            noise: np.ndarray | None = None,
+            rms: np.ndarray | None = None,
+            image_conversion_factor: float = 1.0,
+            rms_conversion_factor: float = 1.0,
+            uncorrelated: bool = False,
     ) -> None:
 
         self.noise = noise
@@ -38,16 +38,17 @@ class NoiseModel:
 
         cy, cx = np.array(noise_covariance_full.shape) // 2
 
-        # Cut/Pad the covariance to the cutout size
+        # Cut/Pad the covariance to the full autocorrelation size
+        covariance_size = 2 * cutout_size - 1
         self.noise_covariance, _ = padded_cutout_with_center(
             noise_covariance_full,
             cx,
             cy,
-            cutout_size,
+            covariance_size,
         )
 
         # Apply the conversion factor
-        self.noise_covariance *= self.image_conversion_factor**2
+        self.noise_covariance *= self.image_conversion_factor ** 2
 
     def _covariance_fft2d(self, noise_image: np.ndarray) -> np.ndarray:
         """
@@ -72,19 +73,29 @@ class NoiseModel:
         img -= np.mean(img)
 
         # Calculate autocorrelation
-        autocorrelation = fftconvolve(img, img[::-1, ::-1], mode="same")
+        autocorrelation = fftconvolve(
+            img,
+            img[::-1, ::-1],
+            mode="full",
+        )
 
         # Normalize the autocorrelation by the number of pairs
         overlap = fftconvolve(
             np.ones_like(img),
             np.ones_like(img)[::-1, ::-1],
-            mode="same",
+            mode="full",
         )
         autocorrelation /= overlap
 
         return autocorrelation
 
-    def calc_error(self, weight: np.ndarray, xc: int, yc: int, cutout_size: int) -> np.ndarray:
+    def calc_error(
+            self,
+            weight: np.ndarray,
+            xc: int,
+            yc: int,
+            cutout_size: int,
+    ) -> np.ndarray:
         """
         Calculate the error on the aperture flux.
 
@@ -136,20 +147,30 @@ class NoiseModel:
 
             # Find the variance of the noise assuming that the noise is centered at 0
             background_variance = (
-                np.sum(negative_pixels**2) / len(negative_pixels)
-            ) * self.image_conversion_factor**2
+                                          np.sum(negative_pixels ** 2) / len(negative_pixels)
+                                  ) * self.image_conversion_factor ** 2
 
             # Return the variance using the uncorrelated noise assumption
-            return background_variance * np.sum(weight**2)
+            return background_variance * np.sum(weight ** 2)
 
         else:
             # Calculate the autocorrelation of the weight function
-            autocorr_weight = fftconvolve(weight, weight[::-1, ::-1], mode="same")
+            autocorr_weight = fftconvolve(
+                weight,
+                weight[::-1, ::-1],
+                mode="full",
+            )
 
             # Return the variance using the correlated noise
             return np.sum(self.noise_covariance * autocorr_weight)
 
-    def rms_error(self, weight, xc, yc, cutout_size) -> np.ndarray:
+    def rms_error(
+            self,
+            weight,
+            xc,
+            yc,
+            cutout_size,
+    ) -> np.ndarray:
         """
         Calculate the error on the aperture flux using the noise image and RMS map.
 
@@ -168,11 +189,23 @@ class NoiseModel:
         if self.kernel is None:
             # Finding the kernel using the local covariance matrix
             cy, cx = np.array(self.noise_covariance.shape) // 2
-            self.kernel = self.noise_covariance / self.noise_covariance[cy, cx]
+            self.kernel = (
+                    self.noise_covariance
+                    / self.noise_covariance[cy, cx]
+            )
 
         # Calculate the RMS prime (weight * RMS)
-        rms_cutout, _ = padded_cutout_with_center(self.rms, xc, yc, cutout_size)
-        rms_prime = rms_cutout * weight * self.rms_conversion_factor
+        rms_cutout, _ = padded_cutout_with_center(
+            self.rms,
+            xc,
+            yc,
+            cutout_size,
+        )
+        rms_prime = (
+                rms_cutout
+                * weight
+                * self.rms_conversion_factor
+        )
 
         # Simplify calculation when uncorrelated noise is assumed
         if self.uncorrelated:
@@ -180,8 +213,12 @@ class NoiseModel:
             return np.sum(rms_prime ** 2)
 
         else:
-            # Convolving the RMS prime with the correlation kernel
-            conv = fftconvolve(rms_prime, self.kernel, mode="same")
+            # Calculate the autocorrelation of the RMS prime
+            autocorr_rms = fftconvolve(
+                rms_prime,
+                rms_prime[::-1, ::-1],
+                mode="full",
+            )
 
             # Return the variance using the correlated noise
-            return np.sum(rms_prime * conv)
+            return np.sum(autocorr_rms * self.kernel)

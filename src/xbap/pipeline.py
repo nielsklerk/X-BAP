@@ -17,7 +17,8 @@ def xbap_flux(image: np.ndarray,
               uncorrelated: bool = False,
               eps: float = 1e-8,
               psf_deconvolver: PSFDeconvolver | None = None,
-              noise_model: NoiseModel | None = None) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+              noise_model: NoiseModel | None = None
+              ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     Calculate the X-BAP aperture flux.
 
@@ -71,7 +72,6 @@ def xbap_flux(image: np.ndarray,
     if noise is None and rms is not None:
         raise ValueError("If rms is provided, noise must also be provided.")
 
-
     # Initialize PSF deconvolver
     if psf_deconvolver is None:
         psf_deconvolver = PSFDeconvolver(psf)
@@ -91,8 +91,8 @@ def xbap_flux(image: np.ndarray,
     # Calculate flux (and optionally error)
     return flux(image,
                 centers,
-                psf_deconvolver,
                 weight_sizes,
+                psf_deconvolver,
                 noise_model,
                 cutout_size=cutout_size,
                 image_conversion_factor=image_conversion_factor,

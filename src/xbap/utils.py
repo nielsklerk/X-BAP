@@ -1,11 +1,14 @@
 import numpy as np
 from numba import njit
 
+
+@njit(fastmath=True)
 def padded_cutout_with_center(image: np.ndarray,
                               cx: float,
                               cy: float,
                               size: int,
-                              cutout: np.ndarray | None = None) -> tuple[np.ndarray, tuple[float, float]]:
+                              cutout: np.ndarray | None = None
+                              ) -> tuple[np.ndarray, tuple[float, float]]:
     """
     Extract a fixed-size cutout centered on (cy, cx).
     Pads with zeros when the cutout extends beyond the image
@@ -77,7 +80,8 @@ def padded_cutout_with_center(image: np.ndarray,
 
 @njit(fastmath=True)
 def calc_flux(weight: np.ndarray,
-              image: np.ndarray) -> float:
+              image: np.ndarray
+              ) -> float:
     """
     Calculate the flux of the cutout using the weight function
 
@@ -119,7 +123,8 @@ def gaussian_2d(x: np.ndarray,
                 sigma_x: float = 1.0,
                 sigma_y: float = 1.0,
                 theta: float = 0.0,
-                amplitude: float = 1.0) -> np.ndarray:
+                amplitude: float = 1.0
+                ) -> np.ndarray:
     """
     Make a 2d Gaussian of the form A*exp(-0.5 (x - x0)^2 / sigma_x^2 - 0.5 (y - y0)^2 / sigma_y^2)
 
@@ -158,8 +163,8 @@ def gaussian_2d(x: np.ndarray,
 
     return amplitude * np.exp(
         -0.5 * (
-            (x_rot / sigma_x) ** 2 +
-            (y_rot / sigma_y) ** 2
+                (x_rot / sigma_x) ** 2 +
+                (y_rot / sigma_y) ** 2
         )
     )
 
@@ -167,11 +172,11 @@ def gaussian_2d(x: np.ndarray,
 @njit(fastmath=True)
 def fourier_gaussian_2d(kx: np.ndarray,
                         ky: np.ndarray,
-                        sigma_x: float = 1.0,
-                        sigma_y: float = 1.0,
-                        theta: float = 0.0,
-                        amplitude: float = 1.0,
-                        fourier_gaussian: np.ndarray | None = None) -> np.ndarray:
+                        sigma_x: float,
+                        sigma_y: float,
+                        theta: float,
+                        fourier_gaussian: np.ndarray
+                        ) -> np.ndarray:
     """
     Calculate the Fourier Transform of a 2d Gaussian centered at (0, 0)
 
@@ -191,7 +196,7 @@ def fourier_gaussian_2d(kx: np.ndarray,
         Rotation angle of the Gaussian in radians
     amplitude: float = 1.0
         Amplitude of the Gaussian
-    fourier_gaussian: np.ndarray | None = None
+    fourier_gaussian: np.ndarray
         Buffer for the Fourier Transform
 
     Returns
@@ -206,41 +211,44 @@ def fourier_gaussian_2d(kx: np.ndarray,
     sx2 = sigma_x * sigma_x
     sy2 = sigma_y * sigma_y
 
-    norm = amplitude * 2.0 * np.pi * sigma_x * sigma_y
-
-    if fourier_gaussian is None:
-        fourier_gaussian = np.empty_like(kx)
+    norm = 2.0 * np.pi * sigma_x * sigma_y
 
     for i in range(kx.shape[0]):
         kxi = kx[i]
         kyi = ky[i]
 
         for j in range(kx.shape[1]):
-
             xr = c * kxi[j] + s * kyi[j]
             yr = -s * kxi[j] + c * kyi[j]
 
             r2 = sx2 * xr * xr + sy2 * yr * yr
             fourier_gaussian[i, j] = norm * np.exp(-0.5 * r2)
 
-    return fourier_gaussian
+
+TWOPI = 2.0 * np.pi
 
 
-TWOPI = 2.0*np.pi
-@njit
+@njit(fastmath=True)
 def prepare_phase_coordinates(kx, ky):
     return -TWOPI * kx, -TWOPI * ky
 
+
 @njit(fastmath=True)
-def compute_phase(kx_scale, ky_scale, dx, dy):
-    ax = kx_scale * dx
-    ay = ky_scale * dy
+def compute_phase(kx, ky, dx, dy, out):
+    nx = kx.shape[1]
+    ny = ky.shape[0]
 
-    sx = np.sin(ax)
-    cx = np.cos(ax)
+    for i in range(ny):
+        ay = ky[i, 0] * dy
+        sy = np.sin(ay)
+        cy = np.cos(ay)
 
-    sy = np.sin(ay)
-    cy = np.cos(ay)
+        for j in range(nx):
+            ax = kx[0, j] * dx
+            sx = np.sin(ax)
+            cx = np.cos(ax)
 
-    # (cx + i sx)(cy + i sy)
-    return (cx * cy - sx * sy) + 1j * (sx * cy + cx * sy)
+            out[i, j] = (
+                    (cx * cy - sx * sy)
+                    + 1j * (sx * cy + cx * sy)
+            )

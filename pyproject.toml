@@ -10,6 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 
+authors = [
+    { name = "Niels de Klerk", email = "nielsklerk03@gmail.com" }
+]
+
 dependencies = [
     "numpy",
     "numba",

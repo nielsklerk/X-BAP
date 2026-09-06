@@ -2,7 +2,7 @@ import numpy as np
 import pyfftw.interfaces.numpy_fft as fft
 import pyfftw
 from tqdm import tqdm
-from .utils import padded_cutout_with_center, fourier_gaussian_2d, prepare_phase_coordinates, compute_phase, calc_flux, calc_flux_shift
+from .utils import padded_cutout_with_center, fourier_gaussian_2d, prepare_phase_coordinates, compute_phase, calc_flux
 
 pyfftw.interfaces.cache.enable()
 

@@ -39,14 +39,12 @@ def xbap_flux(image: np.ndarray,
         - (N, 3): each elliptical Gaussian aperture is defined by three parameters:
         the scale parameter along the x-axis, the scale parameter along the y-axis,
         and the rotation angle relative to the vertical axis.
+    noise: np.ndarray | None = None
+        Noise in the image..
     rms: np.ndarray | None = None
         RMS map of the noise in the image.
-    calculate_noise: bool = True
-        Whether to calculate the noise.
     cutout_size: int = 128
         Size of the cutout.
-    noise_square_size: int = 128
-        Size of the noise square.
     image_conversion_factor: float = 1.0
         Conversion factor.
     rms_conversion_factor: float = 1.0
@@ -55,6 +53,8 @@ def xbap_flux(image: np.ndarray,
         Whether to show the progress.
     uncorrelated: bool = False
         Whether to assume uncorrelated noise in the image.
+    eps: float = 1e-8
+        Small value to avoid division by zero in the prefactor of the deconvolution.
     psf_deconvolver: PSFDeconvolver
         PSF deconvolution algorithm.
     noise_model: NoiseModel
@@ -62,11 +62,15 @@ def xbap_flux(image: np.ndarray,
 
     Returns
     -------
-    np.ndarray | tuple[np.ndarray, np.ndarray]
+    tuple[np.ndarray, np.ndarray|None]
         The calculated X-BAP aperture flux. When measurement errors are included,
-        returns (flux, error).
+        returns (flux, error) else (flux, None).
 
     """
+
+    if noise is None and rms is not None:
+        raise ValueError("If rms is provided, noise must also be provided.")
+
 
     # Initialize PSF deconvolver
     if psf_deconvolver is None:

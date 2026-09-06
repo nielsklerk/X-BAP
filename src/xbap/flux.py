@@ -1,7 +1,8 @@
 import numpy as np
+from tqdm import tqdm
+
 from .noise import NoiseModel
 from .psf import PSFDeconvolver
-from tqdm import tqdm
 from .utils import (
     padded_cutout_with_center,
     fourier_gaussian_2d,

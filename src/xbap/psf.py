@@ -4,7 +4,7 @@ from .utils import padded_cutout_with_center
 
 class PSFDeconvolver:
     def __init__(self, psf: np.ndarray) -> None:
-        self.psf = psf
+        self.psf = np.asarray(psf, dtype=np.float64)
         self.KX, self.KY = None, None
         self.psf_prefactor = None
 

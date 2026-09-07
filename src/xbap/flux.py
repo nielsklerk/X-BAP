@@ -59,7 +59,7 @@ def flux(image: np.ndarray,
 
     """
 
-    image = np.asarray(image)
+    image = np.asarray(image, dtype=np.float64)
 
     centers = np.atleast_2d(centers)
     ws = np.asarray(weight_sizes)

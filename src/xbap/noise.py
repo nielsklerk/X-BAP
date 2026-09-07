@@ -13,8 +13,8 @@ class NoiseModel:
             uncorrelated: bool = False,
     ) -> None:
 
-        self.noise = noise
-        self.rms = rms
+        self.noise = np.asarray(noise, dtype=np.float64)
+        self.rms = np.asarray(rms, dtype=np.float64)
         self.image_conversion_factor = image_conversion_factor
         self.rms_conversion_factor = rms_conversion_factor
         self.uncorrelated = uncorrelated

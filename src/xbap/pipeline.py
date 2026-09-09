@@ -5,7 +5,7 @@ import numpy as np
 
 
 def xbap_flux(image: np.ndarray,
-              psf: np.ndarray,
+              psf: np.ndarray | str,
               centers: np.ndarray,
               weight_sizes: float | np.ndarray,
               noise: np.ndarray | None = None,
@@ -74,8 +74,8 @@ def xbap_flux(image: np.ndarray,
 
     # Initialize PSF deconvolver
     if psf_deconvolver is None:
-        psf_deconvolver = PSFDeconvolver(psf)
-        psf_deconvolver.prepare(cutout_size, eps)
+        psf_deconvolver = PSFDeconvolver(psf, eps)
+        psf_deconvolver.prepare(cutout_size)
 
     # Initialize noise model
     if noise is not None and noise_model is None:

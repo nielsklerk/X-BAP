@@ -1,6 +1,8 @@
 import numpy as np
 from tqdm import tqdm
-from warnings import warn
+import warnings
+
+warnings.simplefilter("always")
 
 from .noise import NoiseModel
 from .psf import PSFDeconvolver
@@ -111,16 +113,13 @@ def flux(image: np.ndarray,
             "number of elements unless one of them contains only one element"
         )
 
-    # FFT grid
-    H = W = cutout_size
-
     complex_in = np.empty(
-        (H, W // 2 + 1),
+        (cutout_size, cutout_size // 2 + 1),
         dtype=np.complex64,
     )
 
-    ky = np.fft.fftfreq(H)[:, None]
-    kx = np.fft.rfftfreq(W)[None, :]
+    ky = np.fft.fftfreq(cutout_size)[:, None]
+    kx = np.fft.rfftfreq(cutout_size)[None, :]
 
     kx_scaled, ky_scaled = prepare_phase_coordinates(kx, ky)
 
@@ -140,11 +139,11 @@ def flux(image: np.ndarray,
         dtype=np.complex64,
     )
     cutout_buffer = np.empty(
-        (H, W),
+        (cutout_size, cutout_size),
         dtype=np.float64,
     )
     phase = np.empty(
-        (H, W // 2 + 1),
+        (cutout_size, cutout_size // 2 + 1),
         dtype=np.complex64,
     )
 
@@ -200,8 +199,6 @@ def flux(image: np.ndarray,
                 weight_fft,
             )
 
-            weight_fft *= psfdeconvolver.psf_prefactor
-
             last_weight = current_weight
 
         # Extract cutout from image
@@ -244,14 +241,11 @@ def flux(image: np.ndarray,
             )
 
         # Find the rescaled weight based on the PSF
-        weight_rescale = np.fft.irfft2(
-            complex_in,
-            s=(H, W),
-        )
+        weight_rescale = psfdeconvolver.deconvolve_weight(complex_in, x_c, y_c, (cutout_size, cutout_size))
 
         # Check if the deconvolution was succesful
-        negative_power = np.sum(weight_rescale[weight_rescale<0]**2)
-        total = np.sum(weight_rescale**2)
+        negative_power = np.sum(weight_rescale[weight_rescale < 0] ** 2)
+        total = np.sum(weight_rescale ** 2)
         negative_power_fraction[j] = negative_power / total
 
         # Calculate the aperture flux
@@ -270,9 +264,10 @@ def flux(image: np.ndarray,
             )
 
     # Warn user when deconvolution was 
-    bad_convolutions = np.flatnonzero(negative_power_fraction>1e-2)
+    bad_convolutions = np.flatnonzero(negative_power_fraction > 1e-2)
     if len(bad_convolutions) > 0:
-        warn(f'Ringing detected for {len(bad_convolutions)} deconvolutions: increase the size of the weight to reduce error')
+        warnings.warn(
+            f'Ringing detected for {len(bad_convolutions)} deconvolutions: increase the size of the weight to reduce error')
 
     # Return the fluxes and errors
     if noise_model is None:

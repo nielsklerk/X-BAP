@@ -1,5 +1,6 @@
 import numpy as np
 from numba import njit
+from astropy.io import fits
 
 
 @njit(fastmath=True)
@@ -252,3 +253,35 @@ def compute_phase(kx, ky, dx, dy, out):
                     (cx * cy - sx * sy)
                     + 1j * (sx * cy + cx * sy)
             )
+
+
+def load_psf_model(filename):
+    with fits.open(filename) as hdul:
+        hdu = hdul["PSF_DATA"]
+        hdr = hdu.header
+
+        basis = hdu.data["PSF_MASK"][0]
+
+        x_zero = hdr["POLZERO1"]
+        x_scale = hdr["POLSCAL1"]
+
+        y_zero = hdr["POLZERO2"]
+        y_scale = hdr["POLSCAL2"]
+
+        degree = hdr["POLDEG1"]
+
+    return basis, x_zero, x_scale, y_zero, y_scale, degree
+
+
+def polynomial_weights(x, y, x_zero, x_scale, y_zero, y_scale, degree):
+    u = (x - x_zero) / x_scale
+    v = (y - y_zero) / y_scale
+
+    weights = []
+
+    for total_degree in range(degree + 1):
+        for i in range(total_degree + 1):
+            j = total_degree - i
+            weights.append(u ** i * v ** j)
+
+    return np.asarray(weights)

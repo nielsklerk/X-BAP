@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+from warnings import warn
 
 from .noise import NoiseModel
 from .psf import PSFDeconvolver
@@ -157,6 +158,9 @@ def flux(image: np.ndarray,
             )
         )
 
+    #
+    negative_power_fraction = np.zeros(n_measurements)
+
     # Main loop
     for j in tqdm(
             range(n_measurements),
@@ -245,6 +249,11 @@ def flux(image: np.ndarray,
             s=(H, W),
         )
 
+        # Check if the deconvolution was succesful
+        negative_power = np.sum(weight_rescale[weight_rescale<0]**2)
+        total = np.sum(weight_rescale**2)
+        negative_power_fraction[j] = negative_power / total
+
         # Calculate the aperture flux
         fluxes[out_idx] = calc_flux(
             weight_rescale,
@@ -259,6 +268,11 @@ def flux(image: np.ndarray,
                 y_c,
                 cutout_size,
             )
+
+    # Warn user when deconvolution was 
+    bad_convolutions = np.flatnonzero(negative_power_fraction>1e-2)
+    if len(bad_convolutions) > 0:
+        warn(f'Ringing detected for {len(bad_convolutions)} deconvolutions: increase the size of the weight to reduce error')
 
     # Return the fluxes and errors
     if noise_model is None:

@@ -1,4 +1,5 @@
 - Only Gaussian weights
+- Assumes background is subtracted
+- Uses a single PSF for the entire image
 - No PSF estimation
 - No inherent deblending
-- Assumes background subtracted

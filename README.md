@@ -1,5 +1,5 @@
 # X-BAP
-Cross-Band Aperture Photometry (X-BAP) is a code for measuring aperture fluxes in astronomical images. It compensates for the effects of the PSF on the observation, thereby allowing an aperture to be applied to the pre-seeing image. This opens the possibility of accurate photometric color measurements when the PSFs in two bands do not match.
+Cross-Band Aperture Photometry (X-BAP) is a code for measuring aperture fluxes in astronomical images. It compensates for the effects of the PSF on the observation, thereby allowing an aperture to be applied to the pre-seeing image. This opens the possibility of accurate photometric color measurements when the PSFs in multiple bands do not match.
 
 ## Installation
 ```bash

@@ -3,6 +3,8 @@
 The main function in X-BAP is **xbap_flux**. This calculates the X-BAP flux and error for one or more sources. 
 This is done by deconvolving a weight function in the pre-seeing image by the PSF, which allows for the same weight function to be used in bands with differenent PSFs. 
 
+***IMPORTANT:*** The Gaussian weight function needs to be larger than the largest PSF of the bands in which X-BAP is applied.
+
 ## Basic Usage
 
 **xbap_flux** always requires an image, psf, center and weight parameters.
@@ -58,23 +60,24 @@ centers = [[100, 100],
            ]
 ```
 
-The X-BAP flux is measured for each center
+The X-BAP flux is measured for each center.
 
 ### Weight parameters
+
 **weight_sizes** determines the shape and size of the apertures used to measure the X-BAP flux.
-The weight is the weight function that is applied to image in the pre-seeing image and is defined in the following way
+The weight is the weight function that is applied to image in the pre-seeing image and is defined in the following way.
+
 $$
-W(x,y)
-=
+W(x,y) = 
 \exp\left[
 -\frac{1}{2}
 \left(
-\left(\frac{x'}{\sigma_x}\right)^2
-+
+\left(\frac{x'}{\sigma_x}\right)^2 +
 \left(\frac{y'}{\sigma_y}\right)^2
 \right)
 \right],
 $$
+
 where
 
 $$
@@ -86,11 +89,12 @@ and the coordinates are rotated by an angle $\theta$:
 
 $$
 x' = \cos(\theta)\Delta x+\sin(\theta)\Delta y,\;
-y' = -\sin(\theta)\Delta x+\cos(\theta)\Delta y
+y' = -\sin(\theta)\Delta x+\cos(\theta)\Delta y.
 $$
 
 $x_0, y_0$ are determined by the center coordinates described above. $\sigma_x$, $\sigma_y$, and $\theta$ can be set to change the shape of the weight function.
 When $\sigma_x=\sigma_y$, the aperture is circular and reduces to
+
 $$
 W(x,y)
 =
@@ -101,6 +105,7 @@ W(x,y)
 \right)
 \right],
 $$
+
 where $\sigma=\sigma_x=\sigma_y$. In the case that $\sigma_x\neq\sigma_y$, the weight function is elliptical.
 
 The shape of **weight_sizes** is flexible as several shapes are accounted for.
@@ -230,6 +235,7 @@ flux, error = xbap_flux(image=image,
 ### Epsilon
 
 During the deconvolution, **eps** is used to stabilize the result as it prevents division by 0.
+
 $$
-    W^i_\mathrm{A} = \mathcal{F}^{-1}\left\{\frac{\mathcal{F}\{\bar{P}_i\}^*}{|\mathcal{F}\{\bar{P}_i\}|^2+\varepsilon}\cdot\mathcal{F}\{\tilde{W}_\mathrm{A}\}\right\}.
+W^i_\mathrm{A} = \mathcal{F}^{-1}\left\{\frac{\mathcal{F}\{\bar{P}_i\}^*}{|\mathcal{F}\{\bar{P}_i\}|^2+\varepsilon}\cdot\mathcal{F}\{\tilde{W}_\mathrm{A}\}\right\}.
 $$

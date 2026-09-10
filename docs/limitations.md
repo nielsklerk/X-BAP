@@ -1,5 +1,5 @@
 - Only Gaussian weights
 - Assumes background is subtracted
-- Uses a single PSF for the entire image
-- No PSF estimation
+- No PSF estimation built-in
+- No noise estimation built-in
 - No inherent deblending

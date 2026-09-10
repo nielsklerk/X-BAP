@@ -26,8 +26,8 @@ def xbap_flux(image: np.ndarray,
     ----------
     image: np.ndarray
         Image in which the aperture flux will be calculated.
-    psf: np.ndarray
-        PSF of the image.
+    psf: np.ndarray | str
+        PSF of the image or directory to .psf file from PSFex.
     centers: np.ndarray
         Centers of the Gaussian apertures.
     weight_sizes: float | np.ndarray, shape (N,) or (N, 3)

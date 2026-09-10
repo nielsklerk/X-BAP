@@ -15,9 +15,7 @@ def xbap_flux(image: np.ndarray,
               rms_conversion_factor: float = 1.0,
               show_progress: bool = False,
               uncorrelated: bool = False,
-              eps: float = 1e-8,
-              psf_deconvolver: PSFDeconvolver | None = None,
-              noise_model: NoiseModel | None = None
+              eps: float = 1e-8
               ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     Calculate the X-BAP aperture flux.
@@ -35,11 +33,17 @@ def xbap_flux(image: np.ndarray,
 
         - scalar: same scale circular Gaussian apertures is used for all centers.
 
+        - (3,): elliptical Gaussian aperture is defined by three parameters:
+        the scale parameter along the x-axis, the scale parameter along the y-axis,
+        and the rotation angle relative to the vertical axis. The same elliptical
+        Gaussian aperture is used for all sources
+
         - (N,): one cicular Gaussian aperture per center.
 
-        - (N, 3): each elliptical Gaussian aperture is defined by three parameters:
+        - (N, 3): elliptical Gaussian aperture is defined by three parameters:
         the scale parameter along the x-axis, the scale parameter along the y-axis,
-        and the rotation angle relative to the vertical axis.
+        and the rotation angle relative to the vertical axis. One elliptical
+        Gaussian aperture is used for each source.
     noise: np.ndarray | None = None
         Noise in the image..
     rms: np.ndarray | None = None
@@ -56,10 +60,6 @@ def xbap_flux(image: np.ndarray,
         Whether to assume uncorrelated noise in the image.
     eps: float = 1e-8
         Small value to avoid division by zero in the prefactor of the deconvolution.
-    psf_deconvolver: PSFDeconvolver
-        PSF deconvolution algorithm.
-    noise_model: NoiseModel
-        Noise model.
 
     Returns
     -------
@@ -70,15 +70,14 @@ def xbap_flux(image: np.ndarray,
     """
 
     if noise is None and rms is not None:
-        raise ValueError("If rms is provided, noise must also be provided.")
+        raise ValueError("If RMS map is provided, noise must also be provided.")
 
     # Initialize PSF deconvolver
-    if psf_deconvolver is None:
-        psf_deconvolver = PSFDeconvolver(psf, eps)
-        psf_deconvolver.prepare(cutout_size)
+    psf_deconvolver = PSFDeconvolver(psf, eps)
+    psf_deconvolver.prepare(cutout_size)
 
     # Initialize noise model
-    if noise is not None and noise_model is None:
+    if noise is not None:
         noise_model = NoiseModel(
             noise=noise,
             rms=rms,
@@ -87,6 +86,8 @@ def xbap_flux(image: np.ndarray,
             uncorrelated=uncorrelated
         )
         noise_model.set_noise_covariance(cutout_size)
+    else: 
+        noise_model = None
 
     # Calculate flux (and optionally error)
     return flux(image,

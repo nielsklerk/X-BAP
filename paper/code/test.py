@@ -21,6 +21,11 @@ def gaussian_2d(x, y, x0=0, y0=0, sigma_x=1, sigma_y=1, theta=0, A=1):
         )
     )
 
+N = 128
+x = np.arange(0, N, 1) - N / 2
+y = np.arange(0, N, 1) - N / 2
+X, Y = np.meshgrid(x, y)
+
 # Galaxy image is modeled as a Gaussian
 galaxy = gaussian_2d(X, Y, 0, 0, 20, 5, np.pi / 3)
 galaxy /= np.sum(galaxy)

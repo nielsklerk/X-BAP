@@ -67,7 +67,7 @@ The X-BAP flux is measured for each center.
 **weight_sizes** determines the shape and size of the apertures used to measure the X-BAP flux.
 The weight is the weight function that is applied to image in the pre-seeing image and is defined in the following way.
 
-$$
+```math
 W(x,y) = 
 \exp\left[
 -\frac{1}{2}
@@ -76,26 +76,26 @@ W(x,y) =
 \left(\frac{y'}{\sigma_y}\right)^2
 \right)
 \right],
-$$
+```
 
 where
 
-$$
+```math
 \Delta x = x-x_0,\;
 \Delta y = y-y_0
-$$
+```
 
 and the coordinates are rotated by an angle $\theta$:
 
-$$
+```math
 x' = \cos(\theta)\Delta x+\sin(\theta)\Delta y,\;
 y' = -\sin(\theta)\Delta x+\cos(\theta)\Delta y.
-$$
+```
 
 $x_0, y_0$ are determined by the center coordinates described above. $\sigma_x$, $\sigma_y$, and $\theta$ can be set to change the shape of the weight function.
 When $\sigma_x=\sigma_y$, the aperture is circular and reduces to
 
-$$
+```math
 W(x,y)
 =
 \exp\left[
@@ -104,7 +104,7 @@ W(x,y)
 \frac{(x-x_0)^2 + (y-y_0)^2}{\sigma^2}
 \right)
 \right],
-$$
+```
 
 where $\sigma=\sigma_x=\sigma_y$. In the case that $\sigma_x\neq\sigma_y$, the weight function is elliptical.
 
@@ -236,6 +236,6 @@ flux, error = xbap_flux(image=image,
 
 During the deconvolution, **eps** is used to stabilize the result as it prevents division by 0.
 
-$$
+```math
 W^i_\mathrm{A} = \mathcal{F}^{-1}\left\{\frac{\mathcal{F}\{\bar{P}_i\}^*}{|\mathcal{F}\{\bar{P}_i\}|^2+\varepsilon}\cdot\mathcal{F}\{\tilde{W}_\mathrm{A}\}\right\}.
-$$
+```

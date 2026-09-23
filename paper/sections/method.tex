@@ -211,4 +211,32 @@ In the case that the noise in the pixels is uncorrelated, the only non-zero elem
 % where $A$ is some normalization constant, $d$ is the distance between the center of the source and the center of the weight function, and $a$ is the scale parameter of the source.
 % By measuring the flux at different weight sizes and fitting \autoref{eq: point-source detector} to this, the value of $a$ can be used to find a measure of how close the object is to being a point-source.
 
+\section{PSF construction}
+In the case a PSF model is provided the different components and the weights are use to construct the psf. The basis can be written like
+\begin{equation}
+    B = \{B_{00}, B_{10}, B_{01}, B_{20}, B_{11}, B_{02}, ...\}
+\end{equation}
+where each $B_{ij}$ is an image.
+The PSF at (x, y) is then calculated by using the weights
+\begin{equation}
+    w = \{1, x, y, x^2, xy, y^2,...\},
+\end{equation}
+This PSF needs to be normalized, as this is not guaranteed. For this, the vector $B'$ is defined, containing the length of each component
+\begin{equation}
+    B' = \{|B_{00}|, |B_{10}|, |B_{01}|, |B_{20}|, |B_{11}|, |B_{02}|, ...\}
+\end{equation}
+So the PSF is as follows
+\begin{equation}
+    PSF = \frac{w^TB}{w^TB'}
+\end{equation}
+For the deconvolution of the weight function, the Fourier transform of the PSF is needed. To save computations, the basis vectors are Fourier-transformed beforehand
+\begin{equation}
+    \hat{B} = \{\hat{B}_{00}, \hat{B}_{10}, \hat{B}_{01}, \hat{B}_{20}, \hat{B}_{11}, \hat{B}_{02}, ...\}
+\end{equation}
+So the Fourier transform of the local PSF becomes
+\begin{equation}
+    \hat{PSF} = \frac{w^T\hat{B}}{w^TB'}
+\end{equation}
+\section{Warning}
+The deconvolution of the weight function does not always work. It only works when the weight function is 'bigger' then the PSF. In the regime where the weight function is smaller than the PSF, the resulting deconvolution contains ringing instead of a clean weight function. This is detected by calcukating the fraction of the power (sum of oixel values squared) that is the negative values of the deconvolved weight. For this the value of 1\% is currently chosen. 
 \newpage
